@@ -5,9 +5,6 @@ import datetime
 import requests
 import argparse
 import ipaddress
-import threading
-import time
-from queue import Queue
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -41,7 +38,7 @@ def push_to_firebase(host, hashrate, cpu=None, ram=None):
         data["ram_usage"] = ram
         
     try:
-        print(f"[{datetime.datetime.now()}] FIREBASE: Pushing update for {host}: {data}")
+        # print(f"[{datetime.datetime.now()}] FIREBASE: Pushing update for {host}: {data}")
         doc_ref.set(data, merge=True)
         print(f"[{datetime.datetime.now()}] FIREBASE: Successfully pushed update for {host}.")
     except Exception as e:
@@ -85,22 +82,7 @@ def get_system_status(host, port):
     push_to_firebase(host, hashrate, cpu_usage, ram_usage)
 
 
-def worker(task_queue, results_queue, port):
-    """Pulls an IP from the queue, gets hashrate, and pushes to cloud."""
-    while not task_queue.empty():
-        ip = task_queue.get()
-        print(f"[{datetime.datetime.now()}] WORKER: Processing {ip}")
-        hashrate = get_monero_hashrate(host=str(ip), port=port)
-        
-        # Push to cloud for every scanned host
-        push_to_firebase(str(ip), hashrate)
-        
-        if hashrate is not None:
-            results_queue.put((str(ip), hashrate))
-        task_queue.task_done()
-
-
-def scan_network(network_range, port, daemon_mode=False):
+def scan_network(network_range, port):
     """Scans a given network range for miners and prints a summary."""
     try:
         network = ipaddress.ip_network(network_range)
@@ -108,41 +90,12 @@ def scan_network(network_range, port, daemon_mode=False):
         print(f"Error: Invalid network range '{network_range}'. Please use CIDR notation (e.g., 192.168.1.0/24).")
         return
 
-    if not daemon_mode:
-        print(f"Scanning {network.num_addresses} addresses on port {port}...")
-
-    task_queue = Queue()
-    results_queue = Queue()
-
-    print(f"[{datetime.datetime.now()}] SCAN: Populating queue with hosts from {network_range}...")
+    print(f"[{datetime.datetime.now()}] SCAN: Starting sequential scan of {network_range}...")
     for ip in network.hosts():
-        task_queue.put(ip)
-    print(f"[{datetime.datetime.now()}] SCAN: Queue populated with {task_queue.qsize()} hosts.")
-
-    threads = []
-    num_threads = min(network.num_addresses, 50) # Use up to 50 threads
-
-    for _ in range(num_threads):
-        thread = threading.Thread(target=worker, args=(task_queue, results_queue, port))
-        thread.start()
-        threads.append(thread)
-
-    task_queue.join() # Block until all tasks are processed
-
-    for thread in threads:
-        thread.join()
-
-    if not daemon_mode:
-        print("\n--- Scan Complete ---")
-        if results_queue.empty():
-            print("No active miners found.")
-        else:
-            print(f"{'IP Address':<20} {'Hashrate':<20}")
-            print("-" * 40)
-            while not results_queue.empty():
-                ip, hashrate = results_queue.get()
-                print(f"{ip:<20} {hashrate:<20.2f} H/s")
-        print("---------------------")
+        print(f"[{datetime.datetime.now()}] SCAN: Checking {ip}")
+        hashrate = get_monero_hashrate(host=str(ip), port=port)
+        push_to_firebase(str(ip), hashrate)
+    print(f"[{datetime.datetime.now()}] SCAN: Finished sequential scan of {network_range}.")
 
 
 if __name__ == "__main__":
@@ -150,23 +103,9 @@ if __name__ == "__main__":
     parser.add_argument("--host", help="Hostname or IP address of the miner to check.")
     parser.add_argument("--scan", dest="scan_range", help="Scan a network range in CIDR notation (e.g., 192.168.1.0/24).")
     parser.add_argument("--port", type=int, default=8000, help="API port of the miner(s). Defaults to 8000.")
-    parser.add_argument("--daemon", action="store_true", help="Run the probe continuously as a daemon.")
-    parser.add_argument("--interval", type=int, default=300, help="Interval in seconds for daemon mode. Defaults to 300.")
     args = parser.parse_args()
     
-    if args.daemon:
-        if not args.scan_range:
-            print("Error: --scan <range> is required for daemon mode.")
-            exit(1)
-        
-        print("Running in daemon mode. Press Ctrl+C to exit.")
-        while True:
-            print(f"[{datetime.datetime.now()}] Running network scan...")
-            scan_network(args.scan_range, args.port, daemon_mode=True)
-            print(f"[{datetime.datetime.now()}] Scan complete. Waiting for {args.interval} seconds.")
-            time.sleep(args.interval)
-            
-    elif args.scan_range:
+    if args.scan_range:
         scan_network(args.scan_range, args.port)
     elif args.host:
         get_system_status(args.host, args.port)

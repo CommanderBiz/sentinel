@@ -125,7 +125,7 @@ def scan_network(network_range, port, daemon_mode=False):
 
     if not daemon_mode:
         print("\n--- Scan Complete ---")
-        if results_queue..empty():
+        if results_queue.empty():
             print("No active miners found.")
         else:
             print(f"{'IP Address':<20} {'Hashrate':<20}")

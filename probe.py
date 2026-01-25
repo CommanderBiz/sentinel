@@ -108,8 +108,10 @@ if __name__ == "__main__":
     
     if args.scan_range:
         scan_network(args.scan_range, args.port)
-    elif args.host:
+
+    if args.host:
         get_system_status(args.host, args.port)
-    else:
+
+    if not args.scan_range and not args.host:
         parser.print_help()
         exit(1)

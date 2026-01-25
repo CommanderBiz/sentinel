@@ -89,6 +89,7 @@ def worker(task_queue, results_queue, port):
     """Pulls an IP from the queue, gets hashrate, and pushes to cloud."""
     while not task_queue.empty():
         ip = task_queue.get()
+        print(f"[{datetime.datetime.now()}] WORKER: Processing {ip}")
         hashrate = get_monero_hashrate(host=str(ip), port=port)
         
         # Push to cloud for every scanned host
@@ -113,8 +114,10 @@ def scan_network(network_range, port, daemon_mode=False):
     task_queue = Queue()
     results_queue = Queue()
 
+    print(f"[{datetime.datetime.now()}] SCAN: Populating queue with hosts from {network_range}...")
     for ip in network.hosts():
         task_queue.put(ip)
+    print(f"[{datetime.datetime.now()}] SCAN: Queue populated with {task_queue.qsize()} hosts.")
 
     threads = []
     num_threads = min(network.num_addresses, 50) # Use up to 50 threads

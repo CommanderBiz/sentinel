@@ -34,9 +34,9 @@ def display_p2pool_stats(db):
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Blocks Found", data.get("blocks_found", "N/A"))
+            st.metric("Active Shares (Window)", data.get("active_shares", 0))
         with col2:
-            st.metric("Shares Held", data.get("shares_held", "N/A"))
+            st.metric("Total Shares (Valid)", data.get("total_shares", 0))
         with col3:
             st.metric("Payouts Sent", data.get("payouts_sent", "N/A"))
             

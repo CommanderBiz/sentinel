@@ -71,10 +71,11 @@ def get_monero_hashrate(host="127.001", port=8000):
 
 def get_p2pool_stats(miner_address, network="main"):
     """
-    Queries the p2pool.observer API for a miner's stats using /api/miner_info/<address>.
+    Queries the p2pool.observer API for a miner's stats.
+    Calculates active shares by checking recent shares against the PPLNS window.
     """
     if not miner_address:
-        return None, None, None
+        return None, None, None, None, None, None
 
     base_urls = {
         "main": "https://p2pool.observer/",
@@ -82,25 +83,60 @@ def get_p2pool_stats(miner_address, network="main"):
         "nano": "https://nano.p2pool.observer/",
     }
     base_url = base_urls.get(network, "https://p2pool.observer/")
-    api_url = f"{base_url}api/miner_info/{miner_address}"
-
+    
     try:
-        response = requests.get(api_url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+        # 1. Get Miner Info for Total Shares (Index 1)
+        info_url = f"{base_url}api/miner_info/{miner_address}"
+        info_resp = requests.get(info_url, timeout=5)
+        info_resp.raise_for_status()
+        info_data = info_resp.json()
         
-        # Correctly parse the new data structure
-        shares_held = data.get('shares', [{}, {'shares': 'N/A'}])[1].get('shares')
-        blocks_found = "N/A"  # Not available in this endpoint
-        payouts_sent = "N/A" # Not available in this endpoint
+        shares_data = info_data.get('shares', [])
+        total_shares = 0
+        total_uncles = 0
+        if len(shares_data) > 1:
+            total_shares = shares_data[1].get('shares', 0)
+            total_uncles = shares_data[1].get('uncles', 0)
+        
+        # 2. Get Pool Height for Window Calculation
+        # Default window sizes: Main=2160, Mini=2160, Nano=2160 (usually)
+        window_size = 2160 
+        
+        # Get latest share height on the network
+        last_share_url = f"{base_url}api/shares?limit=1"
+        ls_resp = requests.get(last_share_url, timeout=5)
+        ls_resp.raise_for_status()
+        current_height = ls_resp.json()[0].get('side_height', 0)
+        
+        # 3. Get Miner's Recent Shares to count active ones
+        miner_shares_url = f"{base_url}api/shares?miner={miner_address}"
+        ms_resp = requests.get(miner_shares_url, timeout=5)
+        ms_resp.raise_for_status()
+        miner_shares = ms_resp.json()
+        
+        active_shares = 0
+        active_uncles = 0
+        window_start = current_height - window_size
+        
+        for share in miner_shares:
+            if share.get('side_height', 0) >= window_start:
+                # In p2pool.observer API, 'inclusion' > 0 usually means valid share
+                # For simplicity, we count all records in window as shares
+                active_shares += 1
+            else:
+                # Shares are sorted by height desc, so we can stop
+                break
 
-        return blocks_found, shares_held, payouts_sent
-    except (requests.exceptions.RequestException, IndexError) as e:
+        blocks_found = "N/A"
+        payouts_sent = "N/A"
+
+        return blocks_found, total_shares, payouts_sent, active_shares, active_uncles, total_shares
+    except Exception as e:
         print(f"P2Pool: Error processing data from {base_url}: {e}")
-        return None, None, None
+        return None, None, None, None, None, None
 
 
-def push_p2pool_to_firebase(miner_address, blocks_found, shares_held, payouts_sent):
+def push_p2pool_to_firebase(miner_address, blocks_found, shares_held, payouts_sent, active_shares, active_uncles, total_shares):
     """Pushes p2pool stats to the Firestore 'p2pool' collection."""
     if not db:
         return
@@ -109,8 +145,11 @@ def push_p2pool_to_firebase(miner_address, blocks_found, shares_held, payouts_se
     data = {
         "last_seen": datetime.datetime.now(datetime.timezone.utc),
         "blocks_found": blocks_found,
-        "shares_held": shares_held,
-        "payouts_sent": payouts_sent
+        "shares_held": shares_held, # This is 24h in our current mapping
+        "payouts_sent": payouts_sent,
+        "active_shares": active_shares,
+        "active_uncles": active_uncles,
+        "total_shares": total_shares
     }
     try:
         doc_ref.set(data, merge=True)
@@ -138,9 +177,9 @@ def get_system_status(host, port, p2pool_miner_address=None, p2pool_network="mai
     push_to_firebase(host, hashrate, cpu_usage, ram_usage)
 
     if p2pool_miner_address:
-        blocks, shares, payouts = get_p2pool_stats(p2pool_miner_address, p2pool_network)
+        blocks, shares_24h, payouts, window, uncles, total = get_p2pool_stats(p2pool_miner_address, p2pool_network)
         if blocks is not None:
-            push_p2pool_to_firebase(p2pool_miner_address, blocks, shares, payouts)
+            push_p2pool_to_firebase(p2pool_miner_address, blocks, shares_24h, payouts, window, uncles, total)
 
 
 def scan_network(network_range, port):

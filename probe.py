@@ -55,14 +55,12 @@ def push_to_firebase(host, hashrate, cpu=None, ram=None):
         pass # Silently fail for now, or log to a file if needed in the future
 
 
-def get_monero_hashrate(host="127.0.0.1", port=8000):
-    """
-    Queries the miner's API for the current hashrate.
-    Returns the hashrate in H/s, or None if an error occurs.
-    """
+def get_monero_hashrate(host="127.001", port=8000):
     api_url = f"http://{host}:{port}/2/summary"
+    # The miner expects the token in the Authorization header
+    headers = {"Authorization": "Bearer Mugiwara!0"} 
     try:
-        response = requests.get(api_url, timeout=2) # Shorter timeout for scanning
+        response = requests.get(api_url, headers=headers, timeout=2)
         response.raise_for_status()
         data = response.json()
         hashrate = data.get("hashrate", {}).get("total", [0])[0]

@@ -10,7 +10,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "sentinel.db")
 
 # Miner API Configuration
 DEFAULT_MINER_PORT = 8000
-MINER_API_TOKEN = "Mugiwara!0"  # Change this to your actual token
+MINER_API_TOKEN = "YOUR_API_TOKEN"  # Change this to your actual token
 MINER_API_TIMEOUT = 2  # seconds
 
 # P2Pool Configuration

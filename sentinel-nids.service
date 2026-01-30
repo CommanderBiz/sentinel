@@ -6,11 +6,11 @@ After=network.target
 Type=simple
 # NIDS requires root privileges to capture packets
 User=root
-WorkingDirectory=/home/s3nok/sentinel
+WorkingDirectory=/path/to/sentinel
 
 # Execute NIDS with specified network interface
 # IMPORTANT: Change wlan0 to your actual network interface (e.g., eth0, enp0s3)
-ExecStart=/home/s3nok/sentinel/venv/bin/python3 nids.py --iface eno1
+ExecStart=/path/to/sentinel/venv/bin/python3 nids.py --iface eno1
 
 # Restart policy
 Restart=on-failure

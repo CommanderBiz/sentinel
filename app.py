@@ -28,14 +28,16 @@ def get_database():
     return SentinelDB()
 
 
-def format_timestamp(timestamp_str: Optional[str]) -> str:
+def format_timestamp(timestamp_str: Optional[any]) -> str:
     """Format a timestamp string for display."""
     if not timestamp_str:
         return "Never"
     
     try:
         # Parse the timestamp
-        if isinstance(timestamp_str, str):
+        if isinstance(timestamp_str, (int, float)):
+            ts = datetime.datetime.fromtimestamp(timestamp_str, datetime.timezone.utc)
+        elif isinstance(timestamp_str, str):
             # Remove timezone info if present for parsing
             timestamp_str = timestamp_str.replace('+00:00', '').replace('Z', '')
             ts = datetime.datetime.fromisoformat(timestamp_str)
@@ -44,7 +46,15 @@ def format_timestamp(timestamp_str: Optional[str]) -> str:
             
         # Calculate time ago
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-        delta = now - ts.replace(tzinfo=None)
+        # Ensure ts is offset-naive for subtraction if now is offset-naive
+        # But wait, datetime.now(utc) returns offset-aware? 
+        # The original code: now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        # So it makes 'now' naive (UTC time).
+        # We must make 'ts' naive as well if it isn't.
+        if ts.tzinfo is not None:
+             ts = ts.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+             
+        delta = now - ts
         
         if delta.total_seconds() < 60:
             return "Just now"
@@ -178,7 +188,14 @@ def display_p2pool_stats(db: SentinelDB):
                     )
                 with col4:
                     blocks = stat.get("blocks_found", "N/A")
-                    if blocks != "N/A" and blocks > 0:
+                    
+                    # Safely convert to int for comparison
+                    try:
+                        blocks_int = int(blocks)
+                    except (ValueError, TypeError):
+                        blocks_int = 0
+                        
+                    if blocks != "N/A" and blocks_int > 0:
                         st.metric("Blocks Found", blocks, help="Blocks found by this miner 🎉")
                     else:
                         st.metric("Blocks Found", blocks if blocks != "N/A" else 0, help="Blocks found by this miner")
@@ -186,10 +203,24 @@ def display_p2pool_stats(db: SentinelDB):
                 # Second row: Payouts (prominent)
                 st.divider()
                 payouts = stat.get("payouts_sent", "N/A")
+                last_amount = stat.get("last_payout_amount")
+                last_time = stat.get("last_payout_time")
                 
-                if payouts != "N/A" and payouts > 0:
-                    st.success(f"💰 **Total Payouts Received: {payouts}**")
-                elif payouts == 0:
+                # Safely convert to int for comparison
+                try:
+                    payouts_int = int(payouts)
+                except (ValueError, TypeError):
+                    payouts_int = 0
+                
+                if payouts != "N/A" and payouts_int > 0:
+                    col_p1, col_p2 = st.columns([1, 2])
+                    with col_p1:
+                        st.success(f"💰 **Total Payouts: {payouts}**")
+                    with col_p2:
+                        if last_amount is not None:
+                            st.info(f"Last Payout: **{last_amount:.6f} XMR** ({format_timestamp(last_time)})")
+                            
+                elif payouts != "N/A" and payouts_int == 0:
                     st.info("💰 No payouts yet. Keep mining!")
                 else:
                     st.info("💰 Payout data unavailable")

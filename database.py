@@ -131,6 +131,25 @@ class SentinelDB:
                 CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged 
                 ON alerts(acknowledged, timestamp DESC)
             """)
+            
+            # Run schema migrations
+            self.migrate_schema(conn)
+
+    def migrate_schema(self, conn):
+        """Handle schema updates for existing databases."""
+        cursor = conn.cursor()
+        
+        # Check for new columns in p2pool_stats
+        cursor.execute("PRAGMA table_info(p2pool_stats)")
+        columns = [info[1] for info in cursor.fetchall()]
+        
+        if 'last_payout_amount' not in columns:
+            print("Migrating database: Adding last_payout_amount to p2pool_stats")
+            cursor.execute("ALTER TABLE p2pool_stats ADD COLUMN last_payout_amount REAL")
+            
+        if 'last_payout_time' not in columns:
+            print("Migrating database: Adding last_payout_time to p2pool_stats")
+            cursor.execute("ALTER TABLE p2pool_stats ADD COLUMN last_payout_time TIMESTAMP")
     
     def upsert_miner(self, host: str, hashrate: Optional[float], 
                      cpu: Optional[float] = None, ram: Optional[float] = None):
@@ -164,7 +183,9 @@ class SentinelDB:
     def upsert_p2pool_stats(self, miner_address: str, blocks_found: str, 
                            shares_held: int, payouts_sent: str,
                            active_shares: int, active_uncles: int, 
-                           total_shares: int):
+                           total_shares: int,
+                           last_payout_amount: Optional[float] = None,
+                           last_payout_time: Optional[datetime.datetime] = None):
         """Insert or update P2Pool stats."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -174,8 +195,8 @@ class SentinelDB:
             cursor.execute("""
                 INSERT INTO p2pool_stats 
                 (miner_address, last_seen, blocks_found, shares_held, payouts_sent,
-                 active_shares, active_uncles, total_shares)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 active_shares, active_uncles, total_shares, last_payout_amount, last_payout_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(miner_address) DO UPDATE SET
                     last_seen = excluded.last_seen,
                     blocks_found = excluded.blocks_found,
@@ -183,9 +204,11 @@ class SentinelDB:
                     payouts_sent = excluded.payouts_sent,
                     active_shares = excluded.active_shares,
                     active_uncles = excluded.active_uncles,
-                    total_shares = excluded.total_shares
+                    total_shares = excluded.total_shares,
+                    last_payout_amount = excluded.last_payout_amount,
+                    last_payout_time = excluded.last_payout_time
             """, (miner_address, timestamp, blocks_found, shares_held, payouts_sent,
-                  active_shares, active_uncles, total_shares))
+                  active_shares, active_uncles, total_shares, last_payout_amount, last_payout_time))
             
             # Add to history
             cursor.execute("""

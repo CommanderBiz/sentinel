@@ -1,5 +1,12 @@
 # Gemini Project Memory
 
+## Project Checkpoint: 2026-02-15 (Payout Tracking Fixes & Improvements)
+- **Fixed Payout Count Limit**: Increased API query limit from 10 to 1000 in `probe.py` to ensure "Total Payouts" doesn't get stuck.
+- **Enhanced Payout Tracking**: Added `total_payout_amount` to database schema and probe logic to track cumulative XMR earned.
+- **Dashboard Updates**: Modified `app.py` to display the total XMR amount alongside the payout count.
+- **Diagnostic Tool Fixes**: Corrected `diagnose_p2pool.py` API endpoints and fixed a bug where integer miner IDs caused crashes.
+- **Database Migration**: Successfully added `total_payout_amount` column to `p2pool_stats` table.
+
 ## Project Checkpoint: 2026-02-08 (P2Pool API Fixes & Payout Tracking)
 - **P2Pool Integration Fixes**:
     - Corrected API endpoints in `probe.py` for fetching blocks (`api/found_blocks`) and payouts (`api/payouts/{address}`).

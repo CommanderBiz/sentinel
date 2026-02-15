@@ -153,7 +153,8 @@ def diagnose_p2pool(miner_address, network="main"):
                 print(f"  ✅ Latest share on network:")
                 print(f"     Height: {latest[0].get('side_height')}")
                 print(f"     Time: {latest[0].get('timestamp')}")
-                print(f"     Miner: {latest[0].get('miner', 'N/A')[:20]}...")
+                miner_val = str(latest[0].get('miner', 'N/A'))
+                print(f"     Miner: {miner_val[:20]}...")
             else:
                 print(f"  ⚠️  No shares on network yet")
         else:
@@ -164,7 +165,7 @@ def diagnose_p2pool(miner_address, network="main"):
     
     # Test 6: Check payouts
     print("📋 Test 6: Payouts")
-    payouts_url = f"{base_url}api/payouts?miner={miner_address}"
+    payouts_url = f"{base_url}api/payouts/{miner_address}?limit=100"
     print(f"  URL: {payouts_url}")
     
     try:
@@ -176,16 +177,16 @@ def diagnose_p2pool(miner_address, network="main"):
             if payouts:
                 print(f"\n  💰 Recent Payouts:")
                 for i, payout in enumerate(payouts[:5], 1):  # Show first 5
-                    amount = payout.get('value', 0) / 1e12  # Convert to XMR
+                    amount = payout.get('coinbase_reward', 0) / 1e12  # Convert to XMR
                     timestamp = payout.get('timestamp', 'N/A')
-                    height = payout.get('height', 'N/A')
+                    height = payout.get('side_height', 'N/A')
                     print(f"    {i}. Amount: {amount:.8f} XMR | Time: {timestamp} | Height: {height}")
                 
                 if len(payouts) > 5:
                     print(f"    ... and {len(payouts) - 5} more")
                     
                 # Calculate total
-                total_xmr = sum(p.get('value', 0) for p in payouts) / 1e12
+                total_xmr = sum(p.get('coinbase_reward', 0) for p in payouts) / 1e12
                 print(f"\n  💎 Total Paid: {total_xmr:.8f} XMR")
             else:
                 print(f"  ⚠️  No payouts found yet")

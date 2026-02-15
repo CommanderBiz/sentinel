@@ -180,7 +180,7 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         latest_time = None
         
         try:
-            payouts_url = f"{base_url}api/payouts/{miner_address}"
+            payouts_url = f"{base_url}api/payouts/{miner_address}?limit=1000"
             print(f"  Querying: {payouts_url}")
             payouts_resp = requests.get(payouts_url, timeout=config.P2POOL_API_TIMEOUT)
             payouts_resp.raise_for_status()
@@ -197,7 +197,7 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
                 print(f"  Latest payout: {latest_amount:.6f} XMR at {latest_time}")
                 
                 # Calculate total payout amount (optional, may be slow for many payouts)
-                if payouts_count <= 100:  # Only calculate if reasonable number
+                if payouts_count <= 1000:  # Increased limit for total calculation too
                     total_payout_amount = sum(p.get('coinbase_reward', 0) for p in payouts_data) / 1e12
                     print(f"  Total paid out: {total_payout_amount:.6f} XMR")
         except Exception as e:
@@ -217,7 +217,8 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         # - total_shares: All valid shares ever found
         # - latest_amount: Amount of the last payout
         # - latest_time: Timestamp of the last payout
-        return blocks_found, active_shares, payouts_count, active_shares, active_uncles, total_shares, latest_amount, latest_time
+        # - total_payout_amount: Sum of all payouts found (up to limit)
+        return blocks_found, active_shares, payouts_count, active_shares, active_uncles, total_shares, latest_amount, latest_time, total_payout_amount
         
     except requests.exceptions.Timeout:
         print(f"  ❌ Timeout querying P2Pool API for {network} network")
@@ -295,7 +296,7 @@ def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] 
         print(f"\nFetching P2Pool stats for {p2pool_network} network...")
         print(f"Miner address: {p2pool_miner_address}")
         
-        blocks, shares_24h, payouts, active_in_window, uncles, total, latest_amount, latest_time = get_p2pool_stats(
+        blocks, shares_24h, payouts, active_in_window, uncles, total, latest_amount, latest_time, total_amount = get_p2pool_stats(
             p2pool_miner_address, p2pool_network
         )
         
@@ -303,7 +304,7 @@ def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] 
             try:
                 db.upsert_p2pool_stats(
                     p2pool_miner_address, blocks, shares_24h, payouts, 
-                    active_in_window, uncles, total, latest_amount, latest_time
+                    active_in_window, uncles, total, latest_amount, latest_time, total_amount
                 )
                 print(f"\n  ✅ P2Pool stats stored successfully")
                 print(f"  📊 Summary:")
@@ -311,6 +312,8 @@ def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] 
                 print(f"     Total Shares: {total}")
                 if latest_amount is not None:
                     print(f"     Latest Payout: {latest_amount:.6f} XMR")
+                if total_amount > 0:
+                    print(f"     Total Paid Out: {total_amount:.6f} XMR")
                 if uncles > 0:
                     print(f"     Uncles: {uncles}")
             except Exception as e:

@@ -205,6 +205,7 @@ def display_p2pool_stats(db: SentinelDB):
                 payouts = stat.get("payouts_sent", "N/A")
                 last_amount = stat.get("last_payout_amount")
                 last_time = stat.get("last_payout_time")
+                total_amount = stat.get("total_payout_amount", 0)
                 
                 # Safely convert to int for comparison
                 try:
@@ -216,6 +217,8 @@ def display_p2pool_stats(db: SentinelDB):
                     col_p1, col_p2 = st.columns([1, 2])
                     with col_p1:
                         st.success(f"💰 **Total Payouts: {payouts}**")
+                        if total_amount and total_amount > 0:
+                            st.write(f"Total Amount: **{total_amount:.6f} XMR**")
                     with col_p2:
                         if last_amount is not None:
                             st.info(f"Last Payout: **{last_amount:.6f} XMR** ({format_timestamp(last_time)})")

@@ -1,4 +1,4 @@
-# Sentinel Setup Script for Windows
+﻿# Sentinel Setup Script for Windows
 # PowerShell script for automated installation
 
 # Requires PowerShell 5.0+
@@ -81,15 +81,7 @@ $installDir = Prompt-WithDefault "Where should Sentinel be installed?" $defaultI
 Write-Host ""
 
 if (Test-Path $installDir) {
-    Write-Host "⚠️  Directory already exists: $installDir" -ForegroundColor Yellow
-    if (Prompt-YesNo "Do you want to overwrite it?") {
-        $backupDir = "$installDir.backup.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        Write-Host "Backing up to: $backupDir"
-        Move-Item $installDir $backupDir
-    } else {
-        Write-Host "Installation cancelled." -ForegroundColor Red
-        exit 1
-    }
+    Write-Host "⚠️  Directory already exists: $installDir. Proceeding..." -ForegroundColor Yellow
 }
 
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
@@ -119,7 +111,8 @@ foreach ($cmd in $pythonCommands) {
             Write-Host "✓ Found Python: $version" -ForegroundColor Green
             break
         }
-    } catch {
+    }
+    catch {
         continue
     }
 }
@@ -156,7 +149,8 @@ Write-Host ""
 # Check if files exist
 if ((Test-Path "probe.py") -and (Test-Path "app.py")) {
     Write-Host "✓ Sentinel files found in current directory" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "Sentinel files not found."
     Write-Host ""
     
@@ -166,7 +160,8 @@ if ((Test-Path "probe.py") -and (Test-Path "app.py")) {
         Write-Host "Extracting archive..."
         Expand-Archive -Path $archivePath -DestinationPath $installDir -Force
         Write-Host "✓ Files extracted" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "❌ Archive not found: $archivePath" -ForegroundColor Red
         exit 1
     }
@@ -199,7 +194,8 @@ if (Prompt-YesNo "Create Python virtual environment? (Recommended)") {
     & $pythonCmd -m pip install -r requirements.txt --quiet
     
     Write-Host "✓ Virtual environment created" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "Installing Python packages..."
     & $pythonCmd -m pip install -r requirements.txt
     Write-Host "✓ Python packages installed" -ForegroundColor Green
@@ -309,7 +305,7 @@ if (Prompt-YesNo "Run test scan now?") {
     Write-Host ""
     Write-Host "Running test scan..."
     
-    $probeArgs = @("probe.py", "--host", "127.0.0.1", "--port", $minerPort)
+    $probeArgs = @("probe.py", "--host", "100.76.60.22", "--port", $minerPort)
     
     if ($useP2Pool) {
         $probeArgs += "--p2pool-miner-address"
@@ -348,7 +344,7 @@ if (Prompt-YesNo "Set up scheduled tasks?") {
     # Create scheduled task for probe
     Write-Host "Creating scheduled task for probe..."
     
-    $probeArgs = "-File `"$installDir\probe.py`" --host 127.0.0.1 --port $minerPort"
+    $probeArgs = "-File `"$installDir\probe.py`" --host 100.76.60.22 --port $minerPort"
     if ($useP2Pool) {
         $probeArgs += " --p2pool-miner-address $p2poolAddress --p2pool-network $p2poolNetwork"
     }
@@ -360,7 +356,8 @@ if (Prompt-YesNo "Set up scheduled tasks?") {
     try {
         Register-ScheduledTask -TaskName "SentinelProbe" -Action $action -Trigger $trigger -Settings $settings -Description "Sentinel Miner Monitoring" -Force | Out-Null
         Write-Host "✓ Probe scheduled task created" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "⚠️  Could not create scheduled task: $_" -ForegroundColor Yellow
         Write-Host "You may need to run PowerShell as Administrator." -ForegroundColor Yellow
     }
@@ -406,7 +403,7 @@ pause
     $probeContent = @"
 @echo off
 cd /d "$installDir"
-"$pythonCmd" probe.py --host 127.0.0.1 --port $minerPort
+"$pythonCmd" probe.py --host 100.76.60.22 --port $minerPort
 pause
 "@
     Set-Content -Path $probeBat -Value $probeContent
@@ -462,12 +459,13 @@ Write-Host "  • Double-click 'Sentinel Probe' shortcut"
 Write-Host "  OR"
 if ($useP2Pool) {
     Write-Host "  cd $installDir"
-    Write-Host "  $pythonCmd probe.py --host 127.0.0.1 --port $minerPort \"
+    Write-Host "  $pythonCmd probe.py --host 100.76.60.22 --port $minerPort \"
     Write-Host "    --p2pool-miner-address $p2poolAddress \"
     Write-Host "    --p2pool-network $p2poolNetwork"
-} else {
+}
+else {
     Write-Host "  cd $installDir"
-    Write-Host "  $pythonCmd probe.py --host 127.0.0.1 --port $minerPort"
+    Write-Host "  $pythonCmd probe.py --host 100.76.60.22 --port $minerPort"
 }
 
 Write-Host ""

@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 RELEASE_DIR="release"
 PROJECT_NAME="sentinel"
 
@@ -365,7 +365,7 @@ EOF
 
 echo "Creating Windows archive..."
 cd "$RELEASE_DIR"
-zip -r -q "${PROJECT_NAME}-windows-v${VERSION}.zip" "${PROJECT_NAME}-windows-v${VERSION}"
+python3 -m zipfile -c "${PROJECT_NAME}-windows-v${VERSION}.zip" "${PROJECT_NAME}-windows-v${VERSION}"
 cd ..
 
 echo -e "${GREEN}✓ Windows package created: ${PROJECT_NAME}-windows-v${VERSION}.zip${NC}"
@@ -404,9 +404,13 @@ echo -e "${BLUE}═════════════════════�
 cat > "$RELEASE_DIR/RELEASE_NOTES.md" << EOF
 # Sentinel v${VERSION} Release Notes
 
-## 🎉 What's New
+## 🎉 What's New in v1.0.1
 
-This is the initial release of Sentinel - a comprehensive monitoring solution for Monero miners!
+This patch release addresses a bug in the automated Linux setup script.
+
+### 🐛 Bug Fixes
+
+- **Linux Setup**: Fixed an issue where the installation script would rename the entire script directory, breaking the installation flow when the repository files were adjacent.
 
 ### Features
 

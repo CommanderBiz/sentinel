@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.0.1"
+VERSION="1.0.2"
 RELEASE_DIR="release"
 PROJECT_NAME="sentinel"
 
@@ -404,7 +404,7 @@ echo -e "${BLUE}═════════════════════�
 cat > "$RELEASE_DIR/RELEASE_NOTES.md" << EOF
 # Sentinel v${VERSION} Release Notes
 
-## 🎉 What's New in v1.0.1
+## 🎉 What's New in v1.0.2
 
 This patch release addresses a bug in the automated Linux setup script.
 

@@ -18,7 +18,7 @@ Install-Module ps2exe -Scope CurrentUser
 cd path\to\sentinel
 
 # Convert PowerShell script to EXE
-Invoke-ps2exe -inputFile setup_windows.ps1 -outputFile SentinelSetup.exe -title "Sentinel Setup" -version "1.0.0.0" -company "Sentinel Project" -product "Sentinel Miner Monitor" -copyright "MIT License" -iconFile sentinel.ico -requireAdmin
+Invoke-ps2exe -inputFile setup_windows.ps1 -outputFile SentinelSetup.exe -title "Sentinel Setup" -version "1.0.2.0" -company "Sentinel Project" -product "Sentinel Miner Monitor" -copyright "MIT License" -iconFile sentinel.ico -requireAdmin
 ```
 
 ### Options Explained
@@ -46,7 +46,7 @@ Create `sentinel_installer.nsi`:
 ```nsis
 ; Sentinel Installer Script
 !define PRODUCT_NAME "Sentinel"
-!define PRODUCT_VERSION "1.0.0"
+!define PRODUCT_VERSION "1.0.2"
 !define PRODUCT_PUBLISHER "Sentinel Project"
 !define PRODUCT_WEB_SITE "https://github.com/yourusername/sentinel"
 
@@ -275,9 +275,9 @@ See README.md for full documentation
 "@ | Out-File -FilePath "release\sentinel-windows\README_WINDOWS.md"
 
 # Create the ZIP
-Compress-Archive -Path "release\sentinel-windows\*" -DestinationPath "sentinel-windows-v1.0.0.zip"
+Compress-Archive -Path "release\sentinel-windows\*" -DestinationPath "sentinel-windows-v1.0.2.zip"
 
-Write-Host "✓ Windows release created: sentinel-windows-v1.0.0.zip"
+Write-Host "✓ Windows release created: sentinel-windows-v1.0.2.zip"
 ```
 
 ## Testing the Installer
@@ -322,7 +322,7 @@ This prevents Windows SmartScreen warnings.
 ## Distribution
 
 Upload to GitHub Releases with:
-- `sentinel-windows-v1.0.0.zip` (main archive)
+- `sentinel-windows-v1.0.2.zip` (main archive)
 - `SentinelSetup.exe` (optional, if built)
 - `CHANGELOG.md`
 - `README_WINDOWS.md`

@@ -84,6 +84,8 @@ class SentinelDB:
                     last_payout_amount REAL,
                     last_payout_time TIMESTAMP,
                     total_payout_amount REAL,
+                    current_effort REAL,
+                    average_effort REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -171,6 +173,14 @@ class SentinelDB:
             print("Migrating database: Adding total_payout_amount to p2pool_stats")
             cursor.execute("ALTER TABLE p2pool_stats ADD COLUMN total_payout_amount REAL")
 
+        if 'current_effort' not in columns:
+            print("Migrating database: Adding current_effort to p2pool_stats")
+            cursor.execute("ALTER TABLE p2pool_stats ADD COLUMN current_effort REAL")
+
+        if 'average_effort' not in columns:
+            print("Migrating database: Adding average_effort to p2pool_stats")
+            cursor.execute("ALTER TABLE p2pool_stats ADD COLUMN average_effort REAL")
+
         # Create arp_history on existing databases
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='arp_history'")
         if not cursor.fetchone():
@@ -222,7 +232,9 @@ class SentinelDB:
                            total_shares: int,
                            last_payout_amount: Optional[float] = None,
                            last_payout_time: Optional[datetime.datetime] = None,
-                           total_payout_amount: Optional[float] = None):
+                           total_payout_amount: Optional[float] = None,
+                           current_effort: Optional[float] = None,
+                           average_effort: Optional[float] = None):
         """Insert or update P2Pool stats."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -233,8 +245,8 @@ class SentinelDB:
                 INSERT INTO p2pool_stats 
                 (miner_address, last_seen, blocks_found, shares_held, payouts_sent,
                  active_shares, active_uncles, total_shares, last_payout_amount, 
-                 last_payout_time, total_payout_amount)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 last_payout_time, total_payout_amount, current_effort, average_effort)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(miner_address) DO UPDATE SET
                     last_seen = excluded.last_seen,
                     blocks_found = excluded.blocks_found,
@@ -245,10 +257,12 @@ class SentinelDB:
                     total_shares = excluded.total_shares,
                     last_payout_amount = excluded.last_payout_amount,
                     last_payout_time = excluded.last_payout_time,
-                    total_payout_amount = excluded.total_payout_amount
+                    total_payout_amount = excluded.total_payout_amount,
+                    current_effort = excluded.current_effort,
+                    average_effort = excluded.average_effort
             """, (miner_address, timestamp, blocks_found, shares_held, payouts_sent,
                   active_shares, active_uncles, total_shares, last_payout_amount, 
-                  last_payout_time, total_payout_amount))
+                  last_payout_time, total_payout_amount, current_effort, average_effort))
             
             # Add to history
             cursor.execute("""

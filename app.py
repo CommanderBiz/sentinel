@@ -200,7 +200,25 @@ def display_p2pool_stats(db: SentinelDB):
                     else:
                         st.metric("Blocks Found", blocks if blocks != "N/A" else 0, help="Blocks found by this miner")
                 
-                # Second row: Payouts (prominent)
+                # Effort row
+                current_effort = stat.get("current_effort")
+                average_effort = stat.get("average_effort")
+                
+                if current_effort is not None or average_effort is not None:
+                    st.divider()
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        if current_effort is not None:
+                            st.metric("🎯 Current Pool Effort", f"{current_effort:.1f}%", help="Effort to find the current block. Lower is better (100% is average)")
+                        else:
+                            st.metric("🎯 Current Pool Effort", "N/A")
+                    with col_e2:
+                        if average_effort is not None:
+                            st.metric("📈 Average Effort (10 blocks)", f"{average_effort:.1f}%", help="Average effort over the last 10 blocks. Lower is better.")
+                        else:
+                            st.metric("📈 Average Effort (10 blocks)", "N/A")
+
+                # Payouts row (prominent)
                 st.divider()
                 payouts = stat.get("payouts_sent", "N/A")
                 last_amount = stat.get("last_payout_amount")

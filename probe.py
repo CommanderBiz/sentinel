@@ -68,7 +68,7 @@ def get_monero_hashrate(host: str = "127.0.0.1", port: int = config.DEFAULT_MINE
         return None
 
 
-def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, int, str, int, int, int, Optional[float], Optional[int]]:
+def get_p2pool_stats(miner_address: str, network: str = "main"):
     """
     Queries the p2pool.observer API for a miner's stats.
     Calculates active shares by checking recent shares against the PPLNS window.
@@ -78,10 +78,10 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         network: P2Pool network (main, mini, or nano)
         
     Returns:
-        Tuple of (blocks_found, shares_held, payouts_sent, active_shares, active_uncles, total_shares, latest_amount, latest_time)
+        Tuple of (blocks_found, shares_held, payouts_sent, active_shares, active_uncles, total_shares, latest_amount, latest_time, total_payout_amount, current_effort, average_effort)
     """
     if not miner_address:
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None
 
     base_url = config.P2POOL_NETWORKS.get(network, config.P2POOL_NETWORKS["main"])
     
@@ -124,7 +124,7 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         if not ls_data:
             print(f"  Warning: No shares found on {network} network")
             # Return what we have from miner_info - use 0 for active shares since we can't verify
-            return "N/A", 0, "N/A", 0, 0, total_shares, None, None
+            return "N/A", 0, "N/A", 0, 0, total_shares, None, None, None, None, None
             
         current_height = ls_data[0].get('side_height', 0)
         print(f"  Current pool height: {current_height}")
@@ -208,6 +208,48 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         print(f"  ✅ Active uncles in window: {active_uncles}")
         print(f"  ✅ Total all-time shares: {total_shares}")
 
+        # 6. Calculate Current and Average Pool Effort
+        current_effort = None
+        average_effort = None
+        try:
+            stats_url = f"{base_url}api/pool/stats"
+            blocks_url = f"{base_url}api/pool/blocks"
+            stats_resp = requests.get(stats_url, timeout=config.P2POOL_API_TIMEOUT)
+            blocks_resp = requests.get(blocks_url, timeout=config.P2POOL_API_TIMEOUT)
+            
+            if stats_resp.status_code == 200 and blocks_resp.status_code == 200:
+                stats_data = stats_resp.json()
+                blocks_data = blocks_resp.json()
+                
+                if blocks_data and isinstance(blocks_data, list) and len(blocks_data) > 0:
+                    current_total_hashes = stats_data.get('pool_statistics', {}).get('totalHashes', 0)
+                    last_block = blocks_data[0]
+                    diff1 = last_block.get('diff', 0)
+                    
+                    if diff1 > 0 and current_total_hashes > 0:
+                        current_effort = (current_total_hashes - last_block.get('totalHashes', 0)) / diff1 * 100
+                        
+                        # Average effort over last 10 blocks (or as many as we have up to 10)
+                        num_blocks_for_avg = min(10, len(blocks_data) - 1)
+                        if num_blocks_for_avg > 0:
+                            avg_effort_sum = 0
+                            count = 0
+                            for i in range(num_blocks_for_avg):
+                                b_current = blocks_data[i]
+                                b_prev = blocks_data[i+1]
+                                b_diff = b_current.get('diff', 0)
+                                if b_diff > 0:
+                                    avg_effort_sum += (b_current.get('totalHashes', 0) - b_prev.get('totalHashes', 0)) / b_diff * 100
+                                    count += 1
+                            
+                            if count > 0:
+                                average_effort = avg_effort_sum / count
+        except Exception as e:
+            print(f"  ⚠️  Could not calculate pool effort: {e}")
+
+        print(f"  ✅ Current Network Effort: {f'{current_effort:.2f}%' if current_effort else 'N/A'}")
+        print(f"  ✅ Average Effort (Last 10 Blocks): {f'{average_effort:.2f}%' if average_effort else 'N/A'}")
+
         # Return values explanation:
         # - blocks_found: Number of blocks this miner found
         # - shares_held: Same as active_shares (shares currently in PPLNS window)
@@ -218,19 +260,21 @@ def get_p2pool_stats(miner_address: str, network: str = "main") -> Tuple[str, in
         # - latest_amount: Amount of the last payout
         # - latest_time: Timestamp of the last payout
         # - total_payout_amount: Sum of all payouts found (up to limit)
-        return blocks_found, active_shares, payouts_count, active_shares, active_uncles, total_shares, latest_amount, latest_time, total_payout_amount
+        # - current_effort: The current pool effort 
+        # - average_effort: Average effort spanning the previous 10 blocks
+        return blocks_found, active_shares, payouts_count, active_shares, active_uncles, total_shares, latest_amount, latest_time, total_payout_amount, current_effort, average_effort
         
     except requests.exceptions.Timeout:
         print(f"  ❌ Timeout querying P2Pool API for {network} network")
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None
     except requests.exceptions.RequestException as e:
         print(f"  ❌ Error querying P2Pool API: {e}")
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None
     except Exception as e:
         print(f"  ❌ Unexpected error processing P2Pool data from {base_url}: {e}")
         import traceback
         traceback.print_exc()
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None
 
 
 def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] = None, 
@@ -296,7 +340,7 @@ def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] 
         print(f"\nFetching P2Pool stats for {p2pool_network} network...")
         print(f"Miner address: {p2pool_miner_address}")
         
-        blocks, shares_24h, payouts, active_in_window, uncles, total, latest_amount, latest_time, total_amount = get_p2pool_stats(
+        blocks, shares_24h, payouts, active_in_window, uncles, total, latest_amount, latest_time, total_amount, current_effort, average_effort = get_p2pool_stats(
             p2pool_miner_address, p2pool_network
         )
         
@@ -304,7 +348,7 @@ def get_system_status(host: str, port: int, p2pool_miner_address: Optional[str] 
             try:
                 db.upsert_p2pool_stats(
                     p2pool_miner_address, blocks, shares_24h, payouts, 
-                    active_in_window, uncles, total, latest_amount, latest_time, total_amount
+                    active_in_window, uncles, total, latest_amount, latest_time, total_amount, current_effort, average_effort
                 )
                 print(f"\n  ✅ P2Pool stats stored successfully")
                 print(f"  📊 Summary:")

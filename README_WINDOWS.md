@@ -8,10 +8,11 @@
 
 The wizard will:
 - Check for Python
-- Install dependencies
 - Configure your miner settings
+- Download and install NSSM (Non-Sucking Service Manager)
+- Setup background services to run the Probe and Dashboard automatically
+- Configure Windows Firewall for tailscale/LAN access
 - Create desktop shortcuts
-- Set up scheduled tasks (optional)
 
 ## Requirements
 
@@ -68,14 +69,23 @@ cd C:\Users\YourName\sentinel
 python probe.py --stats
 ```
 
-## Scheduled Tasks
+## Background Services
 
-If you set up scheduled tasks during installation:
+If you installed the background services during setup, Sentinel runs silently in the background via NSSM.
 
-1. Press `Win + R`
-2. Type `taskschd.msc`
-3. Look for "SentinelProbe" task
-4. You can enable/disable or modify the schedule
+To restart or check the status of these services, open an **Administrator PowerShell** and run:
+
+```powershell
+# Restart the dashboard
+Restart-Service sentinel-dash -Force
+
+# Restart the probe
+Restart-Service sentinel-probe -Force
+
+# Check service status via NSSM
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" status sentinel-dash
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" status sentinel-probe
+```
 
 ## Troubleshooting
 
@@ -126,8 +136,12 @@ If accessing dashboard from another computer:
 
 ## Uninstall
 
-1. Delete the Sentinel folder
-2. Remove scheduled tasks (if created):
-   - Open Task Scheduler
-   - Delete "SentinelProbe" task
+1. Remove the background services (Open PowerShell as Administrator):
+   ```powershell
+   Stop-Service sentinel-dash -Force
+   Stop-Service sentinel-probe -Force
+   & "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" remove sentinel-dash confirm
+   & "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" remove sentinel-probe confirm
+   ```
+2. Delete the Sentinel folder
 3. Remove desktop shortcuts

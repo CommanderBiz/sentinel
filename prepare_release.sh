@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 RELEASE_DIR="release"
 PROJECT_NAME="sentinel"
 
@@ -238,10 +238,11 @@ cat > "$WINDOWS_DIR/README_WINDOWS.md" << 'EOF'
 
 The wizard will:
 - Check for Python
-- Install dependencies
 - Configure your miner settings
+- Download and install NSSM (Non-Sucking Service Manager)
+- Setup background services to run the Probe and Dashboard automatically
+- Configure Windows Firewall for tailscale/LAN access
 - Create desktop shortcuts
-- Set up scheduled tasks (optional)
 
 ## Requirements
 
@@ -298,14 +299,23 @@ cd C:\Users\YourName\sentinel
 python probe.py --stats
 ```
 
-## Scheduled Tasks
+## Background Services
 
-If you set up scheduled tasks during installation:
+If you installed the background services during setup, Sentinel runs silently in the background via NSSM.
 
-1. Press `Win + R`
-2. Type `taskschd.msc`
-3. Look for "SentinelProbe" task
-4. You can enable/disable or modify the schedule
+To restart or check the status of these services, open an **Administrator PowerShell** and run:
+
+```powershell
+# Restart the dashboard
+Restart-Service sentinel-dash -Force
+
+# Restart the probe
+Restart-Service sentinel-probe -Force
+
+# Check service status via NSSM
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" status sentinel-dash
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" status sentinel-probe
+```
 
 ## Troubleshooting
 
@@ -356,10 +366,14 @@ If accessing dashboard from another computer:
 
 ## Uninstall
 
-1. Delete the Sentinel folder
-2. Remove scheduled tasks (if created):
-   - Open Task Scheduler
-   - Delete "SentinelProbe" task
+1. Remove the background services (Open PowerShell as Administrator):
+   ```powershell
+   Stop-Service sentinel-dash -Force
+   Stop-Service sentinel-probe -Force
+   & "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" remove sentinel-dash confirm
+   & "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nssm.exe" remove sentinel-probe confirm
+   ```
+2. Delete the Sentinel folder
 3. Remove desktop shortcuts
 EOF
 
@@ -404,13 +418,20 @@ echo -e "${BLUE}═════════════════════�
 cat > "$RELEASE_DIR/RELEASE_NOTES.md" << EOF
 # Sentinel v${VERSION} Release Notes
 
-## 🎉 What's New in v1.0.2
+## 🎉 What's New in v1.0.3
 
-This patch release addresses a bug in the automated Linux setup script.
+This release brings major stability improvements to the long-term running background services on Windows.
+
+### 🌟 Features / Enhancements
+
+- **Windows NSSM Integration**: Both the Sentinel Dashboard and the Probe polling loop are now seamlessly installed and managed securely as authentic Windows Background Services via NSSM. This completely deprecates the old Windows Task Scheduler model for significantly improved reliability and uptime.
+- **Headless Dashboard Services**: The start_dashboard.bat natively boots Streamlit in headless mode to prevent unwanted browser execution handles.
+- **Continuous Probe Looping**: The run_probe.bat operates dynamically in an infinite 5-minute loop, continuously piping accurate data securely into the backend DB.
+- **Automatic Firewall Exclusions**: During setup, port 8501 is seamlessly opened on the Windows Firewall granting out-of-the-box Tailscale and local network accessibility.
 
 ### 🐛 Bug Fixes
 
-- **Linux Setup**: Fixed an issue where the installation script would rename the entire script directory, breaking the installation flow when the repository files were adjacent.
+- **Linux Setup**: Fixed an issue in v1.0.1 where the installation script would rename the entire script directory, breaking the installation flow when the repository files were adjacent.
 
 ### Features
 
@@ -421,7 +442,7 @@ This patch release addresses a bug in the automated Linux setup script.
 - **Beautiful Dashboard**: Real-time Streamlit web interface
 - **Automatic Hostname Detection**: No more conflicts when monitoring multiple devices
 - **Historical Data**: Track performance over time with charts
-- **Systemd/Task Scheduler Integration**: Automatic monitoring
+- **Systemd/NSSM Integration**: Automatic monitoring tools for Linux and Windows
 - **SQLite Storage**: Fast, local, no cloud dependencies
 
 ### Supported Platforms

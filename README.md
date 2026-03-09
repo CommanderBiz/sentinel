@@ -176,15 +176,19 @@ sudo systemctl enable sentinel-probe.timer
 sudo systemctl start sentinel-probe.timer
 ```
 
-### Using Windows Task Scheduler
+### Using Windows Background Services (NSSM)
 
-1. Open Task Scheduler
-2. Create Basic Task
-3. Trigger: Daily (or your preference)
-4. Action: Start a program
-   - Program: `python.exe`
-   - Arguments: `C:\path\to\probe.py --host 127.0.0.1`
-   - Start in: `C:\path\to\sentinel`
+If you chose to install background services during the Windows GUI setup wizard (`SentinelSetup.bat`), Sentinel will automatically configure both the Dashboard and the Probe to run silently in the background via NSSM (Non-Sucking Service Manager).
+
+To stop, start, or restart these services natively, open **PowerShell as Administrator**:
+
+```powershell
+# Restart the dashboard
+Restart-Service sentinel-dash -Force
+
+# Restart the probe
+Restart-Service sentinel-probe -Force
+```
 
 ## 📊 Dashboard Features
 

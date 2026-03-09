@@ -328,93 +328,157 @@ Write-Host ""
 Start-Sleep -Seconds 1
 
 # ============================================================================
-# STEP 7: Windows Task Scheduler (Optional)
+# STEP 7: Background Services (NSSM)
 # ============================================================================
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "⏰ Step 7: Scheduled Tasks (Optional)" -ForegroundColor Yellow
+Write-Host "⚙️ Step 7: Background Services (NSSM)" -ForegroundColor Yellow
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "Windows Task Scheduler can run Sentinel automatically."
-Write-Host ""
-
-if (Prompt-YesNo "Set up scheduled tasks?") {
+if (Prompt-YesNo "Set up Sentinel background services? (Recommended)") {
     Write-Host ""
+    Write-Host "Checking for NSSM (Non-Sucking Service Manager)..."
     
-    # Create scheduled task for probe
-    Write-Host "Creating scheduled task for probe..."
+    $nssmPath = ""
+    $wingetLinks = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\nssm.exe"
     
-    $probeArgs = "-File `"$installDir\probe.py`" --host 127.0.0.1 --port $minerPort"
-    if ($useP2Pool) {
-        $probeArgs += " --p2pool-miner-address $p2poolAddress --p2pool-network $p2poolNetwork"
+    if (Get-Command "nssm" -ErrorAction SilentlyContinue) {
+        $nssmPath = (Get-Command "nssm").Source
+        Write-Host "✓ NSSM found at: $nssmPath" -ForegroundColor Green
+    } elseif (Test-Path $wingetLinks) {
+        $nssmPath = $wingetLinks
+        Write-Host "✓ NSSM found at: $nssmPath" -ForegroundColor Green
+    } else {
+        Write-Host "NSSM not found. Installing via WinGet..." -ForegroundColor Yellow
+        try {
+            # Try to install NSSM via winget
+            winget install nssm.nssm --silent --accept-package-agreements --accept-source-agreements
+            
+            if (Test-Path $wingetLinks) {
+                $nssmPath = $wingetLinks
+                Write-Host "✓ NSSM installed successfully" -ForegroundColor Green
+            } else {
+                Write-Host "⚠️  Could not locate NSSM after installation." -ForegroundColor Yellow
+                Write-Host "⚠️  Skipping service creation." -ForegroundColor Yellow
+                $nssmPath = $null
+            }
+        } catch {
+            Write-Host "⚠️  Failed to install NSSM: $_" -ForegroundColor Red
+            Write-Host "⚠️  Skipping service creation." -ForegroundColor Yellow
+            $nssmPath = $null
+        }
     }
     
-    $action = New-ScheduledTaskAction -Execute $pythonCmd -Argument $probeArgs -WorkingDirectory $installDir
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    
-    try {
-        Register-ScheduledTask -TaskName "SentinelProbe" -Action $action -Trigger $trigger -Settings $settings -Description "Sentinel Miner Monitoring" -Force | Out-Null
-        Write-Host "✓ Probe scheduled task created" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "⚠️  Could not create scheduled task: $_" -ForegroundColor Yellow
-        Write-Host "You may need to run PowerShell as Administrator." -ForegroundColor Yellow
+    if ($nssmPath) {
+        # 1. Create Dashboard Service
+        Write-Host "Creating Sentinel Dashboard service..."
+        $dashboardBat = Join-Path $installDir "start_dashboard.bat"
+        
+        # Stop and remove if exists
+        if (Get-Service -Name "sentinel-dash" -ErrorAction SilentlyContinue) {
+            & $nssmPath stop sentinel-dash
+            & $nssmPath remove sentinel-dash confirm
+        }
+        
+        & $nssmPath install sentinel-dash "$dashboardBat"
+        & $nssmPath set sentinel-dash AppDirectory "$installDir"
+        & $nssmPath set sentinel-dash Description "Sentinel Web Dashboard"
+        & $nssmPath start sentinel-dash
+        Write-Host "✓ Dashboard service (sentinel-dash) created and started" -ForegroundColor Green
+        
+        # Add Firewall Rule
+        Write-Host "Adding Firewall rule for Dashboard (Port 8501)..."
+        $ruleName = "Sentinel Dashboard (Port 8501)"
+        $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        if (-not $existingRule) {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow -Profile Any | Out-Null
+            Write-Host "✓ Firewall rule added." -ForegroundColor Green
+        }
+        
+        # 2. Create Probe Service
+        Write-Host "Creating Sentinel Probe service..."
+        $probeBat = Join-Path $installDir "run_probe.bat"
+        
+        # Stop and remove old scheduled task if it exists
+        Unregister-ScheduledTask -TaskName "SentinelProbe" -Confirm:$false -ErrorAction SilentlyContinue
+        
+        # Stop and remove old service if exists
+        if (Get-Service -Name "sentinel-probe" -ErrorAction SilentlyContinue) {
+            & $nssmPath stop sentinel-probe
+            & $nssmPath remove sentinel-probe confirm
+        }
+        
+        & $nssmPath install sentinel-probe "$probeBat"
+        & $nssmPath set sentinel-probe AppDirectory "$installDir"
+        & $nssmPath set sentinel-probe Description "Sentinel Miner Monitoring Probe"
+        & $nssmPath start sentinel-probe
+        Write-Host "✓ Probe service (sentinel-probe) created and started" -ForegroundColor Green
     }
 }
 
 Write-Host ""
 Start-Sleep -Seconds 1
 
+
 # ============================================================================
-# STEP 8: Create Shortcuts
+# STEP 8: Create Scripts & Shortcuts
 # ============================================================================
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "🔗 Step 8: Desktop Shortcuts" -ForegroundColor Yellow
+Write-Host "🔗 Step 8: Scripts & Shortcuts" -ForegroundColor Yellow
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
+# Always generate the batch scripts needed for the services
+# Dashboard batch script
+$dashboardBat = Join-Path $installDir "start_dashboard.bat"
+$dashboardContent = @"
+@echo off
+cd /d "$installDir"
+"$pythonCmd" -m streamlit run app.py --server.address=0.0.0.0 --server.headless=true > "$installDir\dashboard_service.log" 2>&1
+pause
+"@
+Set-Content -Path $dashboardBat -Value $dashboardContent
+Write-Host "✓ Dashboard runner script created" -ForegroundColor Green
+
+# Probe batch script
+$probeBat = Join-Path $installDir "run_probe.bat"
+
+$probeArgs = "--host 127.0.0.1 --port $minerPort"
+if ($useP2Pool) {
+    $probeArgs += " --p2pool-miner-address $p2poolAddress --p2pool-network $p2poolNetwork"
+}
+
+$probeContent = @"
+@echo off
+cd /d "$installDir"
+
+:loop
+"$pythonCmd" probe.py $probeArgs
+timeout /t 300 /nobreak > nul
+goto loop
+"@
+Set-Content -Path $probeBat -Value $probeContent
+Write-Host "✓ Probe runner script created" -ForegroundColor Green
+
+# Desktop Shortcuts
 if (Prompt-YesNo "Create desktop shortcuts?") {
     Write-Host ""
-    
     $desktopPath = [Environment]::GetFolderPath("Desktop")
-    
-    # Dashboard shortcut
-    $dashboardBat = Join-Path $installDir "start_dashboard.bat"
-    $dashboardContent = @"
-@echo off
-cd /d "$installDir"
-"$pythonCmd" -m streamlit run app.py
-pause
-"@
-    Set-Content -Path $dashboardBat -Value $dashboardContent
-    
     $WshShell = New-Object -comObject WScript.Shell
+    
     $shortcut = $WshShell.CreateShortcut("$desktopPath\Sentinel Dashboard.lnk")
-    $shortcut.TargetPath = $dashboardBat
-    $shortcut.WorkingDirectory = $installDir
+    $shortcut.TargetPath = "http://localhost:8501"
+    $shortcut.IconLocation = "$installDir\python.exe, 0" # Fallback icon
     $shortcut.Description = "Sentinel Monitoring Dashboard"
     $shortcut.Save()
-    
-    Write-Host "✓ Dashboard shortcut created" -ForegroundColor Green
-    
-    # Probe shortcut
-    $probeBat = Join-Path $installDir "run_probe.bat"
-    $probeContent = @"
-@echo off
-cd /d "$installDir"
-"$pythonCmd" probe.py --host 127.0.0.1 --port $minerPort
-pause
-"@
-    Set-Content -Path $probeBat -Value $probeContent
+    Write-Host "✓ Dashboard web shortcut created" -ForegroundColor Green
     
     $shortcut2 = $WshShell.CreateShortcut("$desktopPath\Sentinel Probe.lnk")
     $shortcut2.TargetPath = $probeBat
     $shortcut2.WorkingDirectory = $installDir
-    $shortcut2.Description = "Run Sentinel Probe"
+    $shortcut2.Description = "Run Sentinel Probe (Manual)"
     $shortcut2.Save()
-    
-    Write-Host "✓ Probe shortcut created" -ForegroundColor Green
+    Write-Host "✓ Probe manual shortcut created" -ForegroundColor Green
 }
 
 Write-Host ""

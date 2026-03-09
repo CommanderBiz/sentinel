@@ -8,6 +8,6 @@ serviceAccountKey.json
 *.env
 GEMINI.md
 google-cloud-sdk
-streamlit.log
+*.log
 sentinel.db
 release/
